@@ -55,7 +55,7 @@ mvn clean compile
 
 **Opción A: Escaneo automático de controladores (recomendado)**
 ```bash
-mvn exec:java -Dexec.mainClass="escuelaing.edu.arep.microspringboot.MicrosSpringBoot"
+mvn exec:java
 ```
 
 **Opción B: Especificar controlador desde línea de comandos**

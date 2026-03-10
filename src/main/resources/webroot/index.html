@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MicroSpringBoot - Inicio</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #4CAF50;
+        }
+        .links {
+            margin-top: 30px;
+        }
+        .links a {
+            display: block;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .links a:hover {
+            background-color: #45a049;
+        }
+        .logo {
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bienvenido a MicroSpringBoot</h1>
+        <p>Este es un servidor web simple implementado en Java con soporte para IoC y arquitectura REST.</p>
+        
+        <div class="logo">
+            <img src="/logo.png" alt="MicroSpringBoot Logo" style="max-width: 200px;" onerror="this.style.display='none'">
+        </div>
+        
+        <h2>Características:</h2>
+        <ul>
+            <li>Servidor HTTP básico</li>
+            <li>Soporte para anotaciones @RestController y @GetMapping</li>
+            <li>Soporte para @RequestParam con valores por defecto</li>
+            <li>Servir archivos estáticos (HTML, PNG, etc.)</li>
+            <li>Escaneo automático de controladores en el classpath</li>
+        </ul>
+        
+        <div class="links">
+            <h2>Prueba los siguientes endpoints:</h2>
+            <a href="/">Endpoint Raíz</a>
+            <a href="/hello">Hello Endpoint</a>
+            <a href="/greeting">Greeting (default)</a>
+            <a href="/greeting?name=Juan">Greeting con parámetro</a>
+            <a href="/saludo">Saludo (español)</a>
+            <a href="/saludo?name=María">Saludo con parámetro</a>
+            <a href="/about.html">Página Acerca de</a>
+        </div>
+    </div>
+</body>
+</html>

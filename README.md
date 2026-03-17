@@ -77,7 +77,7 @@ Probar en navegador: `http://localhost:8080`
 ### 6.1 Construir imagen local
 
 ```bash
-docker build -t microspring:latest .
+mvn exec:java -Dexec.mainClass="escuelaing.edu.arep.microspringboot.MicrosSpringBoot"
 ```
 
 ### 6.2 Ejecutar contenedor

@@ -118,7 +118,7 @@ Servicios esperados:
 ![Vista navegador](docs/images/image.png)
 
 Link video:
-
+https://youtu.be/R4yyLMkd4aw
 
 ## 8. Endpoints de ejemplo
 

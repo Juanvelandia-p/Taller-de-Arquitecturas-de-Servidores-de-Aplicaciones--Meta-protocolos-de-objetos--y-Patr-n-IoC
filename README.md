@@ -1,231 +1,141 @@
-# MicroSpringBoot - Servidor Web IoC en Java
+# MicroSpringBoot
 
-## Descripción
+MicroSpringBoot es un micro-framework web en Java que implementa un servidor HTTP con IoC por anotaciones. Permite registrar controladores con `@RestController`, mapear rutas con `@GetMapping`, recibir parámetros con `@RequestParam` y servir archivos estáticos desde `webroot`.
 
-MicroSpringBoot es un servidor web ligero implementado en Java que proporciona:
-- Servidor HTTP básico capaz de servir páginas HTML e imágenes PNG
-- Framework IoC (Inversión de Control) para construcción de aplicaciones web con POJOs
-- Soporte para múltiples solicitudes no concurrentes
-- Anotaciones personalizadas inspiradas en Spring Boot
+## 1. Resumen del Proyecto
 
-## Características
+### Objetivo
+Construir un servidor web ligero tipo Spring Boot, pero desde cero, aplicando reflexión, inyección por convención y enrutamiento dinámico.
 
-Servidor HTTP que escucha en el puerto 8080  
-Servir archivos estáticos (HTML, CSS, JS, PNG, JPG, etc.)  
-Anotaciones: `@RestController`, `@GetMapping`, `@RequestParam`  
-Escaneo automático de controladores en el classpath  
-Soporte para parámetros de consulta con valores por defecto  
-Uso de Java Reflection para carga dinámica de beans
+### Alcance implementado
+- Resolución de rutas dinámicas (`GET`) por anotaciones.
+- Servicio de archivos estáticos (`html`, `css`, `js`, imágenes).
+- Soporte concurrente para múltiples clientes con pool de hilos.
+- Apagado elegante (`graceful shutdown`) del servidor.
+- Contenerización con Docker y despliegue con Docker Compose.
 
-## Estructura del Proyecto
+### Tecnologías
+- Java 17
+- Maven
+- Docker / Docker Compose
+- Reflection API de Java
 
-```
-MicroSpring/
-├── src/
-│   └── main/
-│       ├── java/
-│       │   └── escuelaing/edu/arep/microspringboot/
-│       │       ├── MicrosSpringBoot.java      # Servidor principal
-│       │       ├── RestController.java        # Anotación de controlador
-│       │       ├── GetMapping.java            # Anotación de mapeo GET
-│       │       ├── RequestParam.java          # Anotación de parámetros
-│       │       ├── HelloController.java       # Controlador de ejemplo
-│       │       └── GreetingController.java    # Controlador con parámetros
-│       └── resources/
-│           └── webroot/                       # Archivos estáticos
-│               ├── index.html
-│               └── about.html
-└── pom.xml
-```
+## 2. Arquitectura
 
-## Requisitos
+El proyecto sigue una arquitectura por capas ligeras:
 
-- Java 17 o superior
-- Maven 3.6 o superior
+1. **Capa de transporte HTTP**
+   - `ServerSocket` acepta conexiones TCP.
+   - Cada conexión se procesa en un `ExecutorService`.
 
-## Instalación y Ejecución
+2. **Capa de enrutamiento**
+   - El framework mantiene un mapa `path -> ControllerMethod`.
+   - Si la ruta existe, invoca el método del controlador por reflexión.
+   - Si no existe, intenta resolver archivo estático en `src/main/resources/webroot`.
 
-### 1. Compilar el proyecto
+3. **Capa IoC / reflexión**
+   - Escanea controladores registrados.
+   - Crea instancias y registra métodos anotados con `@GetMapping`.
+   - Resuelve parámetros con `@RequestParam` y valores por defecto.
 
-```bash
-mvn clean compile
-```
+4. **Capa de respuesta HTTP**
+   - Construye respuestas HTTP 1.1 con `Content-Type` y `Content-Length`.
+   - Soporta códigos de error (`404`, `403`, `500`).
 
-### 2. Ejecutar el servidor
+## 3. Diseño de Clases
 
-**Opción A: Escaneo automático de controladores (recomendado)**
-```bash
-mvn exec:java -Dexec.mainClass="escuelaing.edu.arep.microspringboot.MicrosSpringBoot"
-```
+| Clase | Rol | Responsabilidades |
+|------|-----|-------------------|
+| `MicrosSpringBoot` | Núcleo del framework | Levantar servidor, aceptar conexiones, enrutamiento, estáticos, apagado elegante |
+| `MicrosSpringBoot.ControllerMethod` | DTO interno | Asociar instancia de controlador con método Java |
+| `RestController` | Anotación | Marcar clases como controladores gestionados por el framework |
+| `GetMapping` | Anotación | Asociar método con una ruta `GET` |
+| `RequestParam` | Anotación | Vincular parámetros de query string con argumentos de método |
+| `HelloController` | Controlador ejemplo | Endpoints básicos `/` y `/hello` |
+| `GreetingController` | Controlador ejemplo | Endpoints con parámetros (`/greeting`, `/saludo`) |
 
-**Opción B: Especificar controlador desde línea de comandos**
-```bash
-java -cp target/classes escuelaing.edu.arep.microspringboot.MicrosSpringBoot escuelaing.edu.arep.microspringboot.HelloController
-```
+## 4. Flujo de Solicitud
 
-### 3. Probar el servidor
+1. Cliente envía `GET /ruta`.
+2. `MicrosSpringBoot` recibe socket y despacha a un hilo del pool.
+3. Se parsea request line y query string.
+4. Si hay controlador para la ruta, se invoca por reflexión.
+5. Si no hay controlador, se intenta archivo estático.
+6. Se retorna respuesta HTTP con cabeceras correctas.
 
-Abre tu navegador en `http://localhost:8080`
-
-## Endpoints Disponibles
-
-### Controladores REST
-
-- `GET /` → Mensaje de bienvenida
-- `GET /hello` → Página HTML de saludo
-- `GET /greeting` → Saludo con contador
-- `GET /greeting?name=Juan` → Saludo personalizado
-- `GET /saludo` → Saludo en español
-- `GET /saludo?name=María` → Saludo personalizado en español
-
-### Archivos Estáticos
-
-- `GET /index.html` → Página principal
-- `GET /about.html` → Página acerca de
-- Cualquier archivo en `src/main/resources/webroot/`
-
-## Crear un Nuevo Controlador
-
-### 1. Crear una clase con la anotación @RestController
-
-```java
-package escuelaing.edu.arep.microspringboot;
-
-@RestController
-public class MiControlador {
-
-    @GetMapping("/miendpoint")
-    public String miMetodo() {
-        return "<html><body><h1>Mi Respuesta</h1></body></html>";
-    }
-    
-    @GetMapping("/parametros")
-    public String conParametros(
-        @RequestParam(value = "nombre", defaultValue = "Invitado") String nombre,
-        @RequestParam(value = "edad", defaultValue = "0") String edad) {
-        return String.format("<html><body><p>Nombre: %s, Edad: %s</p></body></html>", 
-                            nombre, edad);
-    }
-}
-```
-
-### 2. Registrar en el escaneo
-
-Agrega tu controlador al método `scanControllers()` en `MicrosSpringBoot.java`:
-
-```java
-try {
-    loadController("escuelaing.edu.arep.microspringboot.MiControlador");
-} catch (ClassNotFoundException e) {
-    // Ignorar si no existe
-}
-```
-
-### 3. Recompilar y ejecutar
+## 5. Ejecución Local
 
 ```bash
-mvn clean compile
-mvn exec:java -Dexec.mainClass="escuelaing.edu.arep.microspringboot.MicrosSpringBoot"
+mvn clean package
+java -cp target/classes escuelaing.edu.arep.microspringboot.MicrosSpringBoot
 ```
 
-## Agregar Archivos Estáticos
+Probar en navegador: `http://localhost:8080`
 
-Simplemente coloca tus archivos HTML, CSS, JS, PNG, etc. en el directorio:
-```
-src/main/resources/webroot/
-```
+## 6. Generación de Imágenes Docker y Despliegue
 
-Ejemplo:
-- Archivo: `src/main/resources/webroot/imagen.png`
-- URL: `http://localhost:8080/imagen.png`
-
-## Arquitectura y Diseño
-
-### Reflexión Java
-
-El framework utiliza Java Reflection para:
-1. Cargar clases dinámicamente en tiempo de ejecución
-2. Inspeccionar anotaciones (`@RestController`, `@GetMapping`, `@RequestParam`)
-3. Invocar métodos de controlador con parámetros dinámicos
-4. Crear instancias de beans sin conocer su tipo en tiempo de compilación
-
-### Inversión de Control (IoC)
-
-- El framework controla el ciclo de vida de los controladores
-- Los desarrolladores solo definen POJOs con anotaciones
-- El framework se encarga de instanciar, registrar y enrutar
-
-### Servidor HTTP
-
-- Implementado con `ServerSocket` y `Socket` de Java
-- Maneja requests HTTP GET
-- Parser simple de headers y query parameters
-- Responde con headers HTTP apropiados
-
-## Pruebas
-
-### Compilar y ejecutar tests
+### 6.1 Construir imagen local
 
 ```bash
-mvn test
+docker build -t microspring:latest .
 ```
 
-## Despliegue en AWS
+### 6.2 Ejecutar contenedor
 
-### Opción 1: EC2 Instance
+```bash
+docker run -d -p 34000:8080 --name firstdockercontainer microspring:latest
+```
 
-1. **Crear una instancia EC2:**
-   - AMI: Amazon Linux 2 o Ubuntu
-   - Tipo: t2.micro (free tier)
-   - Security Group: Permitir puerto 8080
+### 6.3 Publicar imagen en Docker Hub
 
-2. **Conectar a la instancia:**
-   ```bash
-   ssh -i tu-key.pem ec2-user@tu-ip-publica
-   ```
+```bash
+docker tag microspring:latest gsvelandia09/microspring:latest
+docker push gsvelandia09/microspring:latest
+```
 
-3. **Instalar Java y Maven:**
-   ```bash
-   sudo yum install java-17-amazon-corretto maven -y
-   # o en Ubuntu:
-   sudo apt update
-   sudo apt install openjdk-17-jdk maven -y
-   ```
+### 6.4 Desplegar con Docker Compose
 
-4. **Clonar y ejecutar:**
-   ```bash
-   git clone https://github.com/tu-usuario/MicroSpring.git
-   cd MicroSpring
-   mvn clean compile
-   mvn exec:java -Dexec.mainClass="escuelaing.edu.arep.microspringboot.MicrosSpringBoot"
-   ```
+```bash
+docker compose up --build -d
+```
 
-5. **Acceder:**
-   - URL: `http://tu-ip-publica:8080`
+Servicios esperados:
+- `web`: aplicación MicroSpringBoot
+- `db`: MongoDB
 
+## 7. Evidencias de Despliegue (Pruebas)
 
+### Evidencia 1: Contenedor arriba con puerto publicado
 
-## Tecnologías Utilizadas
+![Despliegue docker](docs/images/deploy-docker.svg)
 
-- **Java 17:** Lenguaje de programación
-- **Maven:** Gestión de dependencias y ciclo de vida
-- **Java Reflection API:** Carga dinámica y anotaciones
-- **Java Networking:** ServerSocket para servidor HTTP
-- **Concurrent Collections:** Manejo thread-safe de rutas
+### Evidencia 2: Respuesta HTTP exitosa del endpoint raíz
+
+![Prueba endpoint root](docs/images/deploy-endpoint-root.svg)
+
+### Evidencia 3: Vista en navegador de la app desplegada
+
+![Vista navegador](docs/images/image.png)
+
+Link video:
 
 
-## Limitaciones Conocidas
+## 8. Endpoints de ejemplo
 
-- Servidor de un solo hilo (no concurrente)
-- Sin soporte para POST, PUT, DELETE
-- Sin sesiones o cookies
-- Sin plantillas dinámicas (solo String)
-- Parser HTTP simple (no robusto para producción)
+- `GET /`
+- `GET /hello`
+- `GET /greeting`
+- `GET /greeting?name=Juan`
+- `GET /saludo`
+- `GET /about.html`
 
+## 9. Notas Técnicas
 
+- El framework actual soporta únicamente `GET`.
+- No hay sesiones ni plantillas del lado servidor.
+- El parser HTTP es simple y orientado a fines académicos.
 
-## Autor
+## 10. Autor
 
-Proyecto desarrollado para el curso de Tecnologías de Desarrollo de Software Empresarial (TDSE)  
-Escuela Colombiana de Ingeniería Julio Garavito
+Proyecto académico para TDSE.
 

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+  <rect width="1200" height="360" fill="#0b1020"/>
+  <rect x="20" y="20" width="1160" height="320" rx="10" fill="#111827" stroke="#374151"/>
+  <text x="40" y="60" fill="#93c5fd" font-family="Consolas, 'Courier New', monospace" font-size="24">Prueba de despliegue Docker</text>
+  <text x="40" y="105" fill="#d1d5db" font-family="Consolas, 'Courier New', monospace" font-size="20">$ docker build -t gsvelandia09/microspring:latest .</text>
+  <text x="40" y="140" fill="#d1d5db" font-family="Consolas, 'Courier New', monospace" font-size="20">$ docker run -d -p 34000:8080 --name firstdockercontainer gsvelandia09/microspring:latest</text>
+  <text x="40" y="175" fill="#d1d5db" font-family="Consolas, 'Courier New', monospace" font-size="20">$ docker ps --filter name=firstdockercontainer</text>
+  <text x="40" y="215" fill="#86efac" font-family="Consolas, 'Courier New', monospace" font-size="20">CONTAINER ID   IMAGE                         STATUS     PORTS</text>
+  <text x="40" y="248" fill="#86efac" font-family="Consolas, 'Courier New', monospace" font-size="20">895cd2e96530   gsvelandia09/microspring      Up         0.0.0.0:34000-&gt;8080/tcp</text>
+  <text x="40" y="295" fill="#f9a8d4" font-family="Consolas, 'Courier New', monospace" font-size="18">Evidencia: contenedor en ejecución y puerto publicado correctamente.</text>
+</svg>

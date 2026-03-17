@@ -6,19 +6,28 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MicrosSpringBoot {
 
     private static final int PORT = 8080;
     private static final String WEB_ROOT = "src/main/resources/webroot";
+    private static final int THREAD_POOL_SIZE = Math.max(4, Runtime.getRuntime().availableProcessors() * 2);
     private static Map<String, ControllerMethod> routes = new ConcurrentHashMap<>();
     private static Map<String, Object> controllerInstances = new ConcurrentHashMap<>();
+    private static final AtomicBoolean isRunning = new AtomicBoolean(true);
+    private static ServerSocket serverSocket;
+    private static ExecutorService requestExecutor;
 
     static class ControllerMethod {
         Object instance;
@@ -95,22 +104,34 @@ public class MicrosSpringBoot {
     }
 
     private static void startServer() throws IOException {
-        ServerSocket serverSocket = new ServerSocket(PORT);
+        serverSocket = new ServerSocket(PORT);
+        requestExecutor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+        registerShutdownHook();
 
-        while (true) {
+        while (isRunning.get()) {
             try {
                 Socket clientSocket = serverSocket.accept();
-                handleRequest(clientSocket);
+                requestExecutor.submit(() -> handleRequest(clientSocket));
+            } catch (SocketException e) {
+                // Expected when closing the server socket during graceful shutdown.
+                if (isRunning.get()) {
+                    System.err.println("Socket error handling request: " + e.getMessage());
+                }
             } catch (IOException e) {
-                System.err.println("Error handling request: " + e.getMessage());
+                if (isRunning.get()) {
+                    System.err.println("Error handling request: " + e.getMessage());
+                }
             }
         }
+
+        shutdownExecutorGracefully();
     }
 
-    private static void handleRequest(Socket clientSocket) throws IOException {
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-             PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-             BufferedOutputStream dataOut = new BufferedOutputStream(clientSocket.getOutputStream())) {
+    private static void handleRequest(Socket clientSocket) {
+        try (Socket socket = clientSocket;
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             BufferedOutputStream dataOut = new BufferedOutputStream(socket.getOutputStream())) {
 
             String requestLine = in.readLine();
             if (requestLine == null || requestLine.isEmpty()) {
@@ -148,6 +169,15 @@ public class MicrosSpringBoot {
             String[] parts = fileRequested.split("\\?", 2);
             path = parts[0];
             parseQueryString(parts[1], queryParams);
+        }
+
+        // Prefer static index for root path when available.
+        if ("/".equals(path)) {
+            File indexFile = new File(WEB_ROOT, "index.html");
+            if (indexFile.exists() && !indexFile.isDirectory()) {
+                handleStaticFile(path, out, dataOut);
+                return;
+            }
         }
 
         // Intentar rutear a un controlador
@@ -210,11 +240,11 @@ public class MicrosSpringBoot {
             String response = result != null ? result.toString() : "";
 
             // Enviar respuesta HTTP
-            out.println("HTTP/1.1 200 OK");
-            out.println("Content-Type: text/html; charset=UTF-8");
-            out.println("Content-Length: " + response.getBytes(StandardCharsets.UTF_8).length);
-            out.println();
-            out.println(response);
+            out.print("HTTP/1.1 200 OK\r\n");
+            out.print("Content-Type: text/html; charset=UTF-8\r\n");
+            out.print("Content-Length: " + response.getBytes(StandardCharsets.UTF_8).length + "\r\n");
+            out.print("\r\n");
+            out.print(response);
             out.flush();
 
         } catch (IllegalAccessException | InvocationTargetException e) {
@@ -225,16 +255,29 @@ public class MicrosSpringBoot {
     }
 
     private static void handleStaticFile(String fileRequested, PrintWriter out, BufferedOutputStream dataOut) throws IOException {
-        File file = new File(WEB_ROOT, fileRequested);
+        String relativePath = fileRequested;
+        if ("/".equals(relativePath)) {
+            relativePath = "index.html";
+        } else if (relativePath.startsWith("/")) {
+            relativePath = relativePath.substring(1);
+        }
+
+        // Prevent basic path traversal when serving static files.
+        if (relativePath.contains("..")) {
+            sendErrorResponse(out, 403, "Forbidden");
+            return;
+        }
+
+        File file = new File(WEB_ROOT, relativePath);
 
         if (file.exists() && !file.isDirectory()) {
             byte[] fileData = Files.readAllBytes(file.toPath());
-            String contentType = getContentType(fileRequested);
+            String contentType = getContentType(relativePath);
 
-            out.println("HTTP/1.1 200 OK");
-            out.println("Content-Type: " + contentType);
-            out.println("Content-Length: " + fileData.length);
-            out.println();
+            out.print("HTTP/1.1 200 OK\r\n");
+            out.print("Content-Type: " + contentType + "\r\n");
+            out.print("Content-Length: " + fileData.length + "\r\n");
+            out.print("\r\n");
             out.flush();
 
             dataOut.write(fileData, 0, fileData.length);
@@ -262,10 +305,51 @@ public class MicrosSpringBoot {
     }
 
     private static void sendErrorResponse(PrintWriter out, int statusCode, String message) {
-        out.println("HTTP/1.1 " + statusCode + " " + message);
-        out.println("Content-Type: text/html");
-        out.println();
-        out.println("<html><body><h1>" + statusCode + " - " + message + "</h1></body></html>");
+        String response = "<html><body><h1>" + statusCode + " - " + message + "</h1></body></html>";
+        out.print("HTTP/1.1 " + statusCode + " " + message + "\r\n");
+        out.print("Content-Type: text/html; charset=UTF-8\r\n");
+        out.print("Content-Length: " + response.getBytes(StandardCharsets.UTF_8).length + "\r\n");
+        out.print("\r\n");
+        out.print(response);
         out.flush();
+    }
+
+    private static void registerShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Shutdown signal received. Stopping server gracefully...");
+            stopServer();
+        }));
+    }
+
+    public static void stopServer() {
+        if (!isRunning.compareAndSet(true, false)) {
+            return;
+        }
+
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+            }
+        } catch (IOException e) {
+            System.err.println("Error closing server socket: " + e.getMessage());
+        }
+
+        shutdownExecutorGracefully();
+    }
+
+    private static void shutdownExecutorGracefully() {
+        if (requestExecutor == null || requestExecutor.isShutdown()) {
+            return;
+        }
+
+        requestExecutor.shutdown();
+        try {
+            if (!requestExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                requestExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            requestExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }
